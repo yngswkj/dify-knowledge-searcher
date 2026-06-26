@@ -1,0 +1,44 @@
+{
+  "name": "dify-knowledge-searcher",
+  "productName": "Difyナレッジ検索テスター",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop tester for Dify Knowledge Retrieve API search settings.",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "serve": "node scripts/serve.cjs",
+    "check": "node --check main.cjs && node --check preload.cjs && node scripts/check-index.cjs",
+    "dist": "npm run check && electron-builder --win portable --x64"
+  },
+  "build": {
+    "appId": "local.dify.knowledge-search-tester",
+    "productName": "Difyナレッジ検索テスター",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.cjs",
+      "preload.cjs"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Dify-Knowledge-Search-Tester-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Dify-Knowledge-Search-Tester-${version}-${arch}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron-builder": "^26.0.12",
+    "electron": "^42.5.0"
+  }
+}
