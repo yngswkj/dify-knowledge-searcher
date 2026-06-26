@@ -7,14 +7,34 @@ import { handlePresetInput, handlePresetClick } from "./presets.mjs";
 import { runAll } from "./api.mjs";
 
 function bindEvents() {
+  function openDrawer() {
+    elements.connectionPanel.classList.add("open");
+    elements.drawerOverlay.classList.add("open");
+    elements.settingsToggle.setAttribute("aria-expanded", "true");
+    elements.drawerClose.focus();
+  }
+
+  function closeDrawer() {
+    elements.connectionPanel.classList.remove("open");
+    elements.drawerOverlay.classList.remove("open");
+    elements.settingsToggle.setAttribute("aria-expanded", "false");
+    elements.settingsToggle.focus();
+  }
+
   elements.settingsToggle.addEventListener("click", () => {
-    const isOpen = !elements.connectionPanel.hidden;
-    elements.connectionPanel.hidden = isOpen;
-    elements.settingsToggle.setAttribute("aria-expanded", String(!isOpen));
+    const isOpen = elements.connectionPanel.classList.contains("open");
+    if (isOpen)
+      closeDrawer();
+    else
+      openDrawer();
   });
 
-  elements.connectionPanel.addEventListener("submit", (event) => {
-    event.preventDefault();
+  elements.drawerClose.addEventListener("click", closeDrawer);
+  elements.drawerOverlay.addEventListener("click", closeDrawer);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && elements.connectionPanel.classList.contains("open"))
+      closeDrawer();
   });
 
   elements.toggleKey.addEventListener("click", () => {

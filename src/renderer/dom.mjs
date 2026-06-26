@@ -1,6 +1,8 @@
 export const elements = {
   settingsToggle: document.getElementById("settingsToggle"),
   connectionPanel: document.getElementById("connectionPanel"),
+  drawerOverlay: document.getElementById("drawerOverlay"),
+  drawerClose: document.getElementById("drawerClose"),
   baseUrl: document.getElementById("baseUrl"),
   apiKey: document.getElementById("apiKey"),
   datasetId: document.getElementById("datasetId"),

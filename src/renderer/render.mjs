@@ -155,84 +155,123 @@ export function renderResults() {
     const group = document.createElement("section");
     group.className = "query-group";
 
-    const label = document.createElement("div");
-    label.className = "query-label";
-    label.append(
-      textEl("span", "query"),
-      textEl("span", `${items.length} settings`),
-    );
-
+    const header = document.createElement("div");
+    header.className = "query-group-header";
     const title = document.createElement("h3");
     title.textContent = queryText;
+    const label = document.createElement("span");
+    label.className = "query-label";
+    label.textContent = `${items.length} 設定`;
+    header.append(title, label);
 
-    const grid = document.createElement("div");
-    grid.className = "result-grid";
-
+    const list = document.createElement("div");
+    list.className = "result-list";
     for (const item of items)
-      grid.append(renderResultCard(item));
+      list.append(renderResultRow(item));
 
-    group.append(label, title, grid);
+    group.append(header, list);
     elements.results.append(group);
   }
 }
 
-function renderResultCard(item) {
-  const card = document.createElement("article");
-  card.className = `result-card ${item.status}`;
-
-  const head = document.createElement("div");
-  head.className = "result-head";
-
-  const title = document.createElement("div");
-  title.className = "result-title";
-  const name = document.createElement("strong");
-  name.textContent = item.presetName;
-  const meta = document.createElement("span");
-  meta.textContent = describeRequest(item.requestBody.retrieval_model);
-  title.append(name, meta);
-
-  const badge = statusBadge(item);
-  head.append(title, badge);
-  card.append(head);
-
-  if (item.status === "pending") {
-    card.append(textEl("div", "待機中", "notice"));
-  }
-  else if (item.status === "running") {
-    const notice = document.createElement("div");
-    notice.className = "notice";
-    notice.append(textEl("span", "検索中 "), spinner());
-    card.append(notice);
-  }
-  else if (item.status === "error") {
-    const error = document.createElement("div");
-    error.className = "error-text";
-    error.textContent = item.error;
-    card.append(error);
-  }
-  else if (!item.records.length) {
-    card.append(textEl("div", "records は空でした。top_k、閾値、検索方法を変えて再実行してください。", "notice warning"));
-  }
-  else {
-    const list = document.createElement("div");
-    list.className = "record-list";
-    item.records.forEach((record, index) => list.append(renderRecord(record, index)));
-    card.append(list);
-  }
-
-  const details = document.createElement("details");
-  details.className = "details";
-  const summary = document.createElement("summary");
-  summary.textContent = "Request body";
-  const pre = document.createElement("pre");
-  pre.textContent = JSON.stringify(item.requestBody, null, 2);
-  details.append(summary, pre);
-  card.append(details);
-
-  return card;
+function chevronSvg(className) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.classList.add(className);
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M9 18l6-6-6-6");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.append(path);
+  return svg;
 }
 
-function renderRecord(record, index) {
+function renderResultRow(item) {
+  const row = document.createElement("div");
+  row.className = `result-row ${item.status}`;
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "result-row-trigger";
+
+  const nameEl = document.createElement("span");
+  nameEl.className = "row-preset-name";
+  nameEl.textContent = item.presetName;
+
+  const paramsEl = document.createElement("span");
+  paramsEl.className = "row-params";
+  paramsEl.textContent = describeRequest(item.requestBody.retrieval_model);
+
+  const right = document.createElement("span");
+  right.className = "row-right";
+
+  if (item.status === "success") {
+    const count = document.createElement("span");
+    count.className = `chunk-count${item.records.length === 0 ? " zero" : ""}`;
+    count.textContent = item.records.length === 0 ? "0 chunks" : `${item.records.length} chunks`;
+    right.append(count);
+  }
+
+  right.append(statusBadge(item));
+
+  trigger.append(chevronSvg("row-chevron"), nameEl, paramsEl, right);
+
+  const body = document.createElement("div");
+  body.className = "result-row-body";
+
+  if (item.status === "pending") {
+    const state = document.createElement("div");
+    state.className = "row-state";
+    state.textContent = "待機中";
+    body.append(state);
+  }
+  else if (item.status === "running") {
+    const state = document.createElement("div");
+    state.className = "row-state";
+    state.append(textEl("span", "検索中 "), spinner());
+    body.append(state);
+  }
+  else if (item.status === "error") {
+    const state = document.createElement("div");
+    state.className = "row-state error";
+    state.textContent = item.error;
+    body.append(state);
+  }
+  else if (!item.records.length) {
+    const state = document.createElement("div");
+    state.className = "row-state";
+    state.textContent = "records は空でした。top_k、閾値、検索方法を変えて再実行してください。";
+    body.append(state);
+  }
+  else {
+    const chunkList = document.createElement("div");
+    chunkList.className = "chunk-list";
+    item.records.forEach((record, index) => chunkList.append(renderChunkItem(record, index)));
+    body.append(chunkList);
+  }
+
+  const reqDetails = document.createElement("details");
+  reqDetails.className = "req-body-details";
+  const reqSummary = document.createElement("summary");
+  reqSummary.textContent = "Request body";
+  const pre = document.createElement("pre");
+  pre.textContent = JSON.stringify(item.requestBody, null, 2);
+  reqDetails.append(reqSummary, pre);
+  body.append(reqDetails);
+
+  row.append(trigger, body);
+
+  trigger.addEventListener("click", () => {
+    row.classList.toggle("open");
+  });
+
+  return row;
+}
+
+function renderChunkItem(record, index) {
   const segment = record.segment || {};
   const documentName = segment.document?.name || record.document?.name || "document unknown";
   const position = segment.position ?? record.position ?? "-";
@@ -240,32 +279,55 @@ function renderRecord(record, index) {
   const content = segment.content || record.content || "";
   const score = getScore(record);
 
-  const item = document.createElement("section");
-  item.className = "record";
+  const item = document.createElement("div");
+  item.className = "chunk-item";
 
-  const top = document.createElement("div");
-  top.className = "record-top";
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "chunk-trigger";
+
   const rank = document.createElement("span");
+  rank.className = `chunk-rank${index === 0 ? " top1" : ""}`;
   rank.textContent = `#${index + 1}`;
+
   const scoreEl = document.createElement("span");
-  scoreEl.className = "score mono";
-  scoreEl.textContent = `score ${Number.isFinite(score) ? score.toFixed(6) : "-"}`;
-  top.append(rank, scoreEl);
+  scoreEl.className = "chunk-score";
+  scoreEl.textContent = Number.isFinite(score) ? score.toFixed(6) : "—";
 
-  const body = document.createElement("p");
-  body.className = "content";
-  body.textContent = content || "(content empty)";
+  const preview = document.createElement("span");
+  preview.className = "chunk-preview";
+  preview.textContent = content.slice(0, 80) || "(content empty)";
 
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.append(chip(`document: ${documentName}`, true));
-  meta.append(chip(`position: ${position}`, false, "mono"));
+  const docEl = document.createElement("span");
+  docEl.className = "chunk-doc";
+  docEl.title = documentName;
+  docEl.textContent = documentName;
+
+  trigger.append(chevronSvg("chunk-chevron"), rank, scoreEl, preview, docEl);
+
+  const body = document.createElement("div");
+  body.className = "chunk-body";
+
+  const contentEl = document.createElement("p");
+  contentEl.className = "chunk-content";
+  contentEl.textContent = content || "(content empty)";
+
+  const metaEl = document.createElement("div");
+  metaEl.className = "chunk-meta";
+  metaEl.append(chip(`document: ${documentName}`, true));
+  metaEl.append(chip(`position: ${position}`, false, "mono"));
   if (keywords.length) {
     for (const keyword of keywords)
-      meta.append(chip(`keyword: ${keyword}`, true));
+      metaEl.append(chip(`keyword: ${keyword}`, true));
   }
 
-  item.append(top, body, meta);
+  body.append(contentEl, metaEl);
+  item.append(trigger, body);
+
+  trigger.addEventListener("click", () => {
+    item.classList.toggle("open");
+  });
+
   return item;
 }
 

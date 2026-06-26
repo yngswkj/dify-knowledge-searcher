@@ -24,7 +24,7 @@ PowerShellで `npm` shimが動かない場合は `& 'C:\Program Files\nodejs\npm
   - `dom.mjs`: `elements`（DOM参照シングルトン）+ DOM生成ヘルパ
   - `preset-model.mjs`: `defaultPreset` / `sanitizePreset` / `buildRetrievalModel`
   - `state.mjs`: `state` / `runState`（共有シングルトン）+ `loadState` / `saveState`
-  - `render.mjs`: 全レンダリング（connection/queries/presets/results）
+  - `render.mjs`: 全レンダリング（connection/queries/presets/results）。結果は折りたたみ行（`result-row`）＋展開チャンク（`chunk-*`）のアコーディオン。各トリガに直接click付与で開閉
   - `api.mjs`: `runAll` ほか通信・実行制御（IPC `dify:retrieve` 経由）
   - `presets.mjs`: プリセット入力/クリックのハンドラ
   - `main.mjs`: エントリ。`init()` / `bindEvents()`
