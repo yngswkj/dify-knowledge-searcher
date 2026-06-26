@@ -27,10 +27,12 @@ npm run dist
 
 ## 構成
 
-- `index.html`: UI本体
+- `index.html`: UIマークアップ（CSS/JSは外部参照）
+- `styles/app.css`: UIスタイル
+- `src/renderer/*.mjs`: renderer側のロジック（ESモジュール、エントリは `main.mjs`）
 - `main.cjs`: ElectronウィンドウとDify API代理呼び出し
 - `preload.cjs`: Rendererへ公開する最小API
-- `scripts/check-index.cjs`: HTML内スクリプトの構文チェック
+- `scripts/check-renderer.cjs`: rendererスクリプトの構文チェック
 - `scripts/serve.cjs`: ブラウザ確認用の簡易ローカルサーバー
 
 ## 保存データ
