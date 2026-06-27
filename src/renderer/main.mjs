@@ -1,10 +1,12 @@
 import { elements } from "./dom.mjs";
-import { state, runState, saveState } from "./state.mjs";
+import { state, runState, uiState, saveState } from "./state.mjs";
 import { uid } from "./utils.mjs";
 import { defaultPreset } from "./preset-model.mjs";
 import { renderConnection, renderQueries, renderPresets, renderResults } from "./render.mjs";
 import { handlePresetInput, handlePresetClick } from "./presets.mjs";
 import { runAll } from "./api.mjs";
+
+const NUMERIC_SORT_KEYS = new Set(["top", "avg", "count", "docs", "status"]);
 
 function bindEvents() {
   function openDrawer() {
@@ -109,6 +111,43 @@ function bindEvents() {
   elements.cancelBtn.addEventListener("click", () => {
     if (runState.abortController)
       runState.abortController.abort();
+  });
+
+  // 結果表：絞り込み（クエリ/設定）
+  elements.comboControls.addEventListener("change", (event) => {
+    const select = event.target.closest("[data-filter]");
+    if (!select)
+      return;
+
+    if (select.dataset.filter === "query")
+      uiState.filterQueryId = select.value;
+    else if (select.dataset.filter === "preset")
+      uiState.filterPresetId = select.value;
+
+    renderResults();
+  });
+
+  // 結果表：行選択 / 見出しクリックで並べ替え
+  elements.comboTableWrap.addEventListener("click", (event) => {
+    const sortHeader = event.target.closest("[data-sort]");
+    if (sortHeader) {
+      const key = sortHeader.dataset.sort;
+      if (uiState.sortKey === key) {
+        uiState.sortDir = uiState.sortDir === "asc" ? "desc" : "asc";
+      }
+      else {
+        uiState.sortKey = key;
+        uiState.sortDir = NUMERIC_SORT_KEYS.has(key) ? "desc" : "asc";
+      }
+      renderResults();
+      return;
+    }
+
+    const row = event.target.closest("[data-combo-id]");
+    if (row) {
+      uiState.selectedId = row.dataset.comboId;
+      renderResults();
+    }
   });
 }
 

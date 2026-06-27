@@ -1,8 +1,9 @@
 import { DEFAULT_BASE_URL, MAX_QUERY_LENGTH } from "./config.mjs";
-import { state, runState } from "./state.mjs";
+import { state, runState, uiState } from "./state.mjs";
 import { elements, textEl, badgeEl, chip, spinner } from "./dom.mjs";
-import { escapeAttr, roundWeight, formatWeight, getScore, groupBy, selected } from "./utils.mjs";
+import { escapeAttr, roundWeight, formatWeight, getScore, selected } from "./utils.mjs";
 import { sanitizePreset } from "./preset-model.mjs";
+import { combTop, combAvg, combDocs } from "./metrics.mjs";
 
 export function renderConnection() {
   elements.baseUrl.value = state.connection.baseUrl || DEFAULT_BASE_URL;
@@ -135,11 +136,123 @@ export function renderPresets() {
   }).join("");
 }
 
+const COLUMNS = [
+  { key: "query", label: "クエリ", numeric: false },
+  { key: "preset", label: "設定", numeric: false },
+  { key: "top", label: "top", numeric: true },
+  { key: "avg", label: "avg", numeric: true },
+  { key: "count", label: "件数", numeric: true },
+  { key: "docs", label: "docs", numeric: true },
+  { key: "status", label: "状態", numeric: false },
+];
+
+const TEXT_KEYS = new Set(["query", "preset"]);
+
+const STATUS_LABELS = { success: "成功", running: "実行中", pending: "待機", error: "エラー" };
+const STATUS_RANK = { pending: 0, running: 1, success: 2, error: 3 };
+
 export function renderResults() {
   renderSummary();
+  ensureSelection();
+  renderComboControls();
+  renderComboTable();
+  renderDetail();
+}
 
+function comboMetric(item, key) {
+  switch (key) {
+    case "top": return combTop(item);
+    case "avg": return combAvg(item);
+    case "count": return item.status === "success" ? item.records.length : null;
+    case "docs": return combDocs(item);
+    case "query": return item.queryText;
+    case "preset": return item.presetName;
+    case "status": return STATUS_RANK[item.status] ?? 9;
+    default: return null;
+  }
+}
+
+function comboComparator(a, b) {
+  const key = uiState.sortKey;
+  const dir = uiState.sortDir === "asc" ? 1 : -1;
+  const va = comboMetric(a, key);
+  const vb = comboMetric(b, key);
+
+  if (TEXT_KEYS.has(key))
+    return String(va).localeCompare(String(vb), "ja") * dir;
+
+  // 数値はnullを常に末尾へ。
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
+  return (Number(va) - Number(vb)) * dir;
+}
+
+function visibleCombos() {
+  let rows = runState.results.slice();
+  if (uiState.filterQueryId)
+    rows = rows.filter(item => item.queryId === uiState.filterQueryId);
+  if (uiState.filterPresetId)
+    rows = rows.filter(item => item.presetId === uiState.filterPresetId);
+  rows.sort(comboComparator);
+  return rows;
+}
+
+function ensureSelection() {
+  const visible = visibleCombos();
+  if (!visible.length) {
+    uiState.selectedId = null;
+    return;
+  }
+  if (!visible.some(item => item.id === uiState.selectedId))
+    uiState.selectedId = visible[0].id;
+}
+
+function renderComboControls() {
   if (!runState.results.length) {
-    elements.results.innerHTML = `
+    elements.comboControls.innerHTML = "";
+    return;
+  }
+
+  const queries = [];
+  const presets = [];
+  const seenQuery = new Set();
+  const seenPreset = new Set();
+  for (const item of runState.results) {
+    if (!seenQuery.has(item.queryId)) {
+      seenQuery.add(item.queryId);
+      queries.push({ id: item.queryId, label: item.queryText });
+    }
+    if (!seenPreset.has(item.presetId)) {
+      seenPreset.add(item.presetId);
+      presets.push({ id: item.presetId, label: item.presetName });
+    }
+  }
+
+  const option = (value, label, current) =>
+    `<option value="${escapeAttr(value)}" ${value === current ? "selected" : ""}>${escapeAttr(label)}</option>`;
+
+  elements.comboControls.innerHTML = `
+    <label class="combo-filter">
+      <span>クエリ</span>
+      <select class="select" data-filter="query">
+        ${option("", "すべて", uiState.filterQueryId)}
+        ${queries.map(query => option(query.id, query.label, uiState.filterQueryId)).join("")}
+      </select>
+    </label>
+    <label class="combo-filter">
+      <span>設定</span>
+      <select class="select" data-filter="preset">
+        ${option("", "すべて", uiState.filterPresetId)}
+        ${presets.map(preset => option(preset.id, preset.label, uiState.filterPresetId)).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderComboTable() {
+  if (!runState.results.length) {
+    elements.comboTableWrap.innerHTML = `
       <div class="notice">
         まだ検索結果はありません。接続設定、検索クエリ、検索設定を入力して「実行」を押してください。
         デスクトップ版ではアプリ側からAPIを呼び出すため、通常のブラウザCORS制約を受けません。
@@ -148,30 +261,103 @@ export function renderResults() {
     return;
   }
 
-  const groups = groupBy(runState.results, item => item.queryText);
-  elements.results.innerHTML = "";
+  const fmt = value => (value == null ? "—" : value.toFixed(4));
 
-  for (const [queryText, items] of groups) {
-    const group = document.createElement("section");
-    group.className = "query-group";
+  const head = COLUMNS.map((col) => {
+    const active = uiState.sortKey === col.key;
+    const arrow = active ? (uiState.sortDir === "asc" ? " ▲" : " ▼") : "";
+    const cls = [col.numeric ? "num" : "", active ? "active" : ""].filter(Boolean).join(" ");
+    return `<th class="${cls}" data-sort="${col.key}">${escapeAttr(col.label)}${arrow}</th>`;
+  }).join("");
 
-    const header = document.createElement("div");
-    header.className = "query-group-header";
-    const title = document.createElement("h3");
-    title.textContent = queryText;
-    const label = document.createElement("span");
-    label.className = "query-label";
-    label.textContent = `${items.length} 設定`;
-    header.append(title, label);
+  const body = visibleCombos().map((item) => {
+    const isSuccess = item.status === "success";
+    const count = isSuccess ? `${item.records.length}/${item.requestBody.retrieval_model.top_k}` : "—";
+    const docs = isSuccess ? String(combDocs(item)) : "—";
+    const selectedCls = item.id === uiState.selectedId ? " selected" : "";
+    return `
+      <tr class="combo-row${selectedCls}" data-combo-id="${escapeAttr(item.id)}">
+        <td class="q" title="${escapeAttr(item.queryText)}">${escapeAttr(item.queryText)}</td>
+        <td class="p" title="${escapeAttr(item.presetName)}">${escapeAttr(item.presetName)}</td>
+        <td class="num">${fmt(combTop(item))}</td>
+        <td class="num">${fmt(combAvg(item))}</td>
+        <td class="num">${count}</td>
+        <td class="num">${docs}</td>
+        <td class="st"><span class="dot ${item.status}"></span>${STATUS_LABELS[item.status] || item.status}</td>
+      </tr>
+    `;
+  }).join("");
 
-    const list = document.createElement("div");
-    list.className = "result-list";
-    for (const item of items)
-      list.append(renderResultRow(item));
+  elements.comboTableWrap.innerHTML = `
+    <table class="combo-table">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
 
-    group.append(header, list);
-    elements.results.append(group);
+function renderDetail() {
+  const selectedItem = runState.results.find(item => item.id === uiState.selectedId);
+
+  if (!selectedItem) {
+    elements.detailPane.innerHTML = `<div class="detail-empty">左の表から行を選ぶと、詳細とチャンクを表示します。</div>`;
+    return;
   }
+
+  elements.detailPane.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "detail-header";
+  const title = document.createElement("h3");
+  title.textContent = selectedItem.queryText;
+  const sub = document.createElement("div");
+  sub.className = "detail-sub";
+  sub.append(textEl("span", selectedItem.presetName, "detail-preset"), statusBadge(selectedItem));
+  const params = textEl("div", describeRequest(selectedItem.requestBody.retrieval_model), "detail-params");
+  header.append(title, sub, params);
+
+  const top = combTop(selectedItem);
+  const avg = combAvg(selectedItem);
+  const metrics = document.createElement("div");
+  metrics.className = "detail-metrics";
+  metrics.append(
+    badgeEl(`top ${top == null ? "—" : top.toFixed(4)}`),
+    badgeEl(`avg ${avg == null ? "—" : avg.toFixed(4)}`),
+    badgeEl(`${selectedItem.status === "success" ? selectedItem.records.length : 0} chunks`),
+  );
+
+  elements.detailPane.append(header, metrics);
+
+  if (selectedItem.status === "pending") {
+    elements.detailPane.append(textEl("div", "待機中", "row-state"));
+  }
+  else if (selectedItem.status === "running") {
+    const state = document.createElement("div");
+    state.className = "row-state";
+    state.append(textEl("span", "検索中 "), spinner());
+    elements.detailPane.append(state);
+  }
+  else if (selectedItem.status === "error") {
+    elements.detailPane.append(textEl("div", selectedItem.error, "row-state error"));
+  }
+  else if (!selectedItem.records.length) {
+    elements.detailPane.append(textEl("div", "records は空でした。top_k、閾値、検索方法を変えて再実行してください。", "row-state"));
+  }
+  else {
+    const chunkList = document.createElement("div");
+    chunkList.className = "chunk-list";
+    selectedItem.records.forEach((record, index) => chunkList.append(renderChunkItem(record, index)));
+    elements.detailPane.append(chunkList);
+  }
+
+  const reqDetails = document.createElement("details");
+  reqDetails.className = "req-body-details";
+  const reqSummary = document.createElement("summary");
+  reqSummary.textContent = "Request body";
+  const pre = document.createElement("pre");
+  pre.textContent = JSON.stringify(selectedItem.requestBody, null, 2);
+  reqDetails.append(reqSummary, pre);
+  elements.detailPane.append(reqDetails);
 }
 
 function chevronSvg(className) {
@@ -187,88 +373,6 @@ function chevronSvg(className) {
   path.setAttribute("stroke-linejoin", "round");
   svg.append(path);
   return svg;
-}
-
-function renderResultRow(item) {
-  const row = document.createElement("div");
-  row.className = `result-row ${item.status}`;
-
-  const trigger = document.createElement("button");
-  trigger.type = "button";
-  trigger.className = "result-row-trigger";
-
-  const nameEl = document.createElement("span");
-  nameEl.className = "row-preset-name";
-  nameEl.textContent = item.presetName;
-
-  const paramsEl = document.createElement("span");
-  paramsEl.className = "row-params";
-  paramsEl.textContent = describeRequest(item.requestBody.retrieval_model);
-
-  const right = document.createElement("span");
-  right.className = "row-right";
-
-  if (item.status === "success") {
-    const count = document.createElement("span");
-    count.className = `chunk-count${item.records.length === 0 ? " zero" : ""}`;
-    count.textContent = item.records.length === 0 ? "0 chunks" : `${item.records.length} chunks`;
-    right.append(count);
-  }
-
-  right.append(statusBadge(item));
-
-  trigger.append(chevronSvg("row-chevron"), nameEl, paramsEl, right);
-
-  const body = document.createElement("div");
-  body.className = "result-row-body";
-
-  if (item.status === "pending") {
-    const state = document.createElement("div");
-    state.className = "row-state";
-    state.textContent = "待機中";
-    body.append(state);
-  }
-  else if (item.status === "running") {
-    const state = document.createElement("div");
-    state.className = "row-state";
-    state.append(textEl("span", "検索中 "), spinner());
-    body.append(state);
-  }
-  else if (item.status === "error") {
-    const state = document.createElement("div");
-    state.className = "row-state error";
-    state.textContent = item.error;
-    body.append(state);
-  }
-  else if (!item.records.length) {
-    const state = document.createElement("div");
-    state.className = "row-state";
-    state.textContent = "records は空でした。top_k、閾値、検索方法を変えて再実行してください。";
-    body.append(state);
-  }
-  else {
-    const chunkList = document.createElement("div");
-    chunkList.className = "chunk-list";
-    item.records.forEach((record, index) => chunkList.append(renderChunkItem(record, index)));
-    body.append(chunkList);
-  }
-
-  const reqDetails = document.createElement("details");
-  reqDetails.className = "req-body-details";
-  const reqSummary = document.createElement("summary");
-  reqSummary.textContent = "Request body";
-  const pre = document.createElement("pre");
-  pre.textContent = JSON.stringify(item.requestBody, null, 2);
-  reqDetails.append(reqSummary, pre);
-  body.append(reqDetails);
-
-  row.append(trigger, body);
-
-  trigger.addEventListener("click", () => {
-    row.classList.toggle("open");
-  });
-
-  return row;
 }
 
 function renderChunkItem(record, index) {

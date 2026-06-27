@@ -15,7 +15,9 @@ export const elements = {
   cancelBtn: document.getElementById("cancelBtn"),
   runSummary: document.getElementById("runSummary"),
   messageArea: document.getElementById("messageArea"),
-  results: document.getElementById("results"),
+  comboControls: document.getElementById("comboControls"),
+  comboTableWrap: document.getElementById("comboTableWrap"),
+  detailPane: document.getElementById("detailPane"),
   resultSubtitle: document.getElementById("resultSubtitle"),
 };
 

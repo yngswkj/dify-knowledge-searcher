@@ -23,8 +23,9 @@ PowerShellで `npm` shimが動かない場合は `& 'C:\Program Files\nodejs\npm
   - `utils.mjs`: 純粋ヘルパ（uid / clamp / escape / groupBy ほか）
   - `dom.mjs`: `elements`（DOM参照シングルトン）+ DOM生成ヘルパ
   - `preset-model.mjs`: `defaultPreset` / `sanitizePreset` / `buildRetrievalModel`
-  - `state.mjs`: `state` / `runState`（共有シングルトン）+ `loadState` / `saveState`
-  - `render.mjs`: 全レンダリング（connection/queries/presets/results）。結果は折りたたみ行（`result-row`）＋展開チャンク（`chunk-*`）のアコーディオン。各トリガに直接click付与で開閉
+  - `state.mjs`: `state` / `runState` / `uiState`（共有シングルトン）+ `loadState` / `saveState`。`uiState` は結果表の選択行・並べ替え・絞り込み（非永続）
+  - `metrics.mjs`: 組み合わせの自動指標（`combTop` / `combAvg` / `combDocs`）。正解判定不要
+  - `render.mjs`: 全レンダリング。結果は**評価ワークベンチ**＝比較表（クエリ×設定をソート/フィルタ可能な行で一覧、`renderComboTable`）＋詳細ペイン（選択行のチャンクを `chunk-*` アコーディオンで表示、`renderDetail`）
   - `api.mjs`: `runAll` ほか通信・実行制御（IPC `dify:retrieve` 経由）
   - `presets.mjs`: プリセット入力/クリックのハンドラ
   - `main.mjs`: エントリ。`init()` / `bindEvents()`

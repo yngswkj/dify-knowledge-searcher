@@ -10,6 +10,15 @@ export const runState = {
   finishedAt: 0,
 };
 
+// 結果ワークベンチの表示状態（選択行・並べ替え・絞り込み）。永続化しない。
+export const uiState = {
+  selectedId: null,
+  sortKey: "top",
+  sortDir: "desc",
+  filterQueryId: "",
+  filterPresetId: "",
+};
+
 function normalizeQueries(queries) {
   if (!Array.isArray(queries) || !queries.length)
     return [{ id: uid("query"), text: "" }];
